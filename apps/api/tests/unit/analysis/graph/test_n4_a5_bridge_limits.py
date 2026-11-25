@@ -78,7 +78,7 @@ async def test_effective_a5_bridge_request(monkeypatch, seam, attempt, cap):
                 source, revision_id=str(authority.revision_id),
                 max_context_chars=1000, overlap_chars=50,
             )[0]
-            return await self.provider.generate(
+            return await self.provider.generate_reserved(
                 window=window, tenant_id=authority.tenant_id,
                 request_id=str(reservation), attempt=attempt,
                 reservation_usd=self.provider.reservation_for_attempt(

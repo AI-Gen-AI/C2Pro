@@ -15,7 +15,7 @@ import json
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from hashlib import sha256
-from typing import Protocol
+from typing import Protocol, runtime_checkable
 from uuid import UUID
 
 from sqlalchemy import text
@@ -67,6 +67,24 @@ class N4WindowProvider(Protocol):
     async def generate(
         self, *, window: N4SourceWindow, tenant_id: UUID, request_id: str,
         attempt: int = 1,
+    ) -> N4ProviderReceipt: ...
+
+
+@runtime_checkable
+class N4ReservedWindowProvider(N4WindowProvider, Protocol):
+    """Separate A5 capability; the A1 generate signature stays frozen."""
+
+    attempt_escrow_enabled: bool
+
+    def escrow_policy(self) -> dict[str, object]: ...
+
+    def reservation_for_attempt(
+        self, window: N4SourceWindow, *, attempt: int, ceiling: Decimal,
+    ) -> Decimal: ...
+
+    async def generate_reserved(
+        self, *, window: N4SourceWindow, tenant_id: UUID, request_id: str,
+        attempt: int = 1, reservation_usd: Decimal,
     ) -> N4ProviderReceipt: ...
 
 
@@ -134,13 +152,18 @@ class N4IncrementalRunner:
             raise ValueError("provider.prompt_version must be pinned before reservation")
         self.prompt_version = version
         self.model_id = provider.model_name
-        config = {
+        config: dict[str, object] = {
             "prompt": version,
             "model": self.model_id,
             "window_chars": self.context_limit,
             "overlap": self.overlap,
         }
         self.attempt_escrow_enabled = getattr(provider, "attempt_escrow_enabled", False) is True
+        self._escrow_provider: N4ReservedWindowProvider | None = None
+        if self.attempt_escrow_enabled:
+            if not isinstance(provider, N4ReservedWindowProvider):
+                raise ValueError("N4 explicit reserved provider capability required")
+            self._escrow_provider = provider
         self.retry_policy = retry_policy
         self._retry_policy_pin = None
         provider_retry_policy = getattr(provider, "retry_policy", None)
@@ -165,7 +188,7 @@ class N4IncrementalRunner:
         self._attempt_escrow_policy = None
         if self.attempt_escrow_enabled:
             self._attempt_escrow_policy = json.dumps(
-                provider.escrow_policy(), sort_keys=True, separators=(",", ":"),
+                self._require_escrow_provider().escrow_policy(), sort_keys=True, separators=(",", ":"),
             )
             config["attempt_escrow"] = json.loads(self._attempt_escrow_policy)
         self.config_sha256 = sha256(json.dumps(
@@ -180,9 +203,12 @@ class N4IncrementalRunner:
         ):
             raise ValueError("explicit positive run/call caps and pinned model required")
 
-    def _retry_runtime_identity(self) -> dict:
+    def _retry_runtime_identity(self) -> dict[str, object]:
+        policy = self.retry_policy
+        if policy is None:
+            raise ValueError("N4 explicit retry policy required")
         return {
-            "policy": self.retry_policy.identity(),
+            "policy": policy.identity(),
             "run_cap": str(self.run_cap), "call_cap": str(self.call_reservation),
             "max_attempts": self.max_attempts, "window_chars": self.context_limit,
             "overlap_chars": self.overlap,
@@ -203,16 +229,34 @@ class N4IncrementalRunner:
         ):
             raise ValueError("N4 pinned retry policy changed")
 
+    def _require_escrow_provider(self) -> N4ReservedWindowProvider:
+        provider = self._escrow_provider
+        if (
+            provider is None or self.provider is not provider
+            or self.attempt_escrow_enabled is not True
+            or provider.attempt_escrow_enabled is not True
+        ):
+            raise ValueError("N4 pinned reserved provider capability required")
+        return provider
+
+    def _check_escrow_capability(self) -> None:
+        if self._escrow_provider is not None or self.attempt_escrow_enabled:
+            self._require_escrow_provider()
+        elif getattr(self.provider, "attempt_escrow_enabled", False) is True:
+            raise ValueError("N4 reserved capability cannot be activated after initialization")
+
     def _reservation_for_attempt(self, window: N4SourceWindow, attempt: int) -> Decimal:
         """A5 quotes are per attempt; legacy providers retain their frozen amount."""
         try:
             self._check_retry_policy()
+            self._check_escrow_capability()
             if not self.attempt_escrow_enabled:
                 return self.call_reservation
-            policy = json.dumps(self.provider.escrow_policy(), sort_keys=True, separators=(",", ":"))
+            provider = self._require_escrow_provider()
+            policy = json.dumps(provider.escrow_policy(), sort_keys=True, separators=(",", ":"))
             if policy != self._attempt_escrow_policy:
                 raise ValueError("N4 pinned escrow policy changed")
-            amount = self.provider.reservation_for_attempt(
+            amount = provider.reservation_for_attempt(
                 window, attempt=attempt, ceiling=self.call_reservation,
             )
             if getattr(self.provider, "retry_policy", None) != self.retry_policy:
@@ -352,6 +396,7 @@ class N4IncrementalRunner:
             raise ValueError("N4 provider identity changed; rebuild pinned runner")
 
         self._check_retry_policy()
+        self._check_escrow_capability()
         windows = plan_n4_source_windows(
             model_safe_text, revision_id=str(authority.revision_id),
             max_context_chars=self.context_limit,
@@ -457,8 +502,9 @@ class N4IncrementalRunner:
                     authority, run_id, "EXISTING_RESERVATION_REQUIRES_RECONCILIATION",
                 )
             try:
+                self._check_escrow_capability()
                 if self.attempt_escrow_enabled:
-                    response = await self.provider.generate(
+                    response = await self._require_escrow_provider().generate_reserved(
                         window=window, tenant_id=authority.tenant_id,
                         request_id=str(reserved.reservation_id), attempt=attempt_no,
                         reservation_usd=attempt_reservation,

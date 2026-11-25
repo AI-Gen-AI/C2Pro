@@ -82,13 +82,13 @@ async def test_exact_committed_attempt_amount_required_and_policy_drift():
     window = windows[0]
     quote = provider.reservation_for_attempt(window, attempt=1, ceiling=CALL)
     with pytest.raises(ValueError, match="exact committed"):
-        await provider.generate(window=window, tenant_id=uuid4(), request_id=str(uuid4()),
+        await provider.generate_reserved(window=window, tenant_id=uuid4(), request_id=str(uuid4()),
                                 reservation_usd=quote - D("0.000001"))
     with pytest.raises(ValueError, match="worst-case"):
-        await provider.generate(window=window, tenant_id=uuid4(), request_id=str(uuid4()),
+        await provider.generate_reserved(window=window, tenant_id=uuid4(), request_id=str(uuid4()),
                                 reservation_usd=CALL, attempt=2)
     assert not calls
-    await provider.generate(window=window, tenant_id=uuid4(), request_id=str(uuid4()),
+    await provider.generate_reserved(window=window, tenant_id=uuid4(), request_id=str(uuid4()),
                             reservation_usd=quote)
     assert len(calls) == 1 and calls[0].max_tokens == 8192
     provider.wrapper.model_router.configs[ModelTier.STANDARD].cost_per_1m_output = 16

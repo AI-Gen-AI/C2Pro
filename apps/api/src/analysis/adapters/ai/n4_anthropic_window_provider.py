@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import os
 from decimal import ROUND_CEILING, Decimal
+from typing import Any
 from uuid import UUID
 
 from src.analysis.application.n4_incremental_runner import N4ProviderReceipt
@@ -195,7 +196,7 @@ class AnthropicN4WindowProvider:
             # Do not require hypothetical retry funding to open a first call.
             self._validate_escrow(reservation_usd, windows, attempt=1)
 
-    def _escrow_policy(self) -> dict:
+    def _escrow_policy(self) -> dict[str, Any]:
         from src.core.ai.model_capabilities import full_document_capacity
 
         config = self.wrapper.model_router.configs[self.tier]
@@ -211,7 +212,7 @@ class AnthropicN4WindowProvider:
         if (self.escrow_ceiling_usd is None or not self.escrow_ceiling_usd.is_finite()
                 or self.escrow_ceiling_usd <= 0):
             raise ValueError("N4 positive finite escrow required")
-        policy = {
+        policy: dict[str, Any] = {
             "estimator": N4_ESCROW_ESTIMATOR_VERSION,
             "model": config.name, "input_rate": str(input_rate), "output_rate": str(output_rate),
             "context_cap": context_cap, "output_cap": output_cap,
@@ -238,7 +239,7 @@ class AnthropicN4WindowProvider:
             policy["retry_policy"] = self.retry_policy.identity()
         return policy
 
-    def escrow_policy(self) -> dict:
+    def escrow_policy(self) -> dict[str, Any]:
         """Return a detached pinned policy; refuse mutable routing drift."""
         current = self._escrow_policy()
         if current != self._pinned_escrow_policy:
@@ -326,19 +327,37 @@ class AnthropicN4WindowProvider:
     async def generate(
         self, *, window: N4SourceWindow, tenant_id: UUID, request_id: str,
         attempt: int = 1,
-        reservation_usd: Decimal | None = None,
+    ) -> N4ProviderReceipt:
+        """Frozen A1 interface; cannot bypass the governed escrow capability."""
+        if self.attempt_escrow_enabled or self.escrow_ceiling_usd is not None or self.retry_policy is not None:
+            raise ValueError("N4 exact committed attempt escrow required")
+        return await self._generate(
+            window=window, tenant_id=tenant_id, request_id=request_id, attempt=attempt,
+        )
+
+    async def generate_reserved(
+        self, *, window: N4SourceWindow, tenant_id: UUID, request_id: str,
+        attempt: int = 1, reservation_usd: Decimal,
+    ) -> N4ProviderReceipt:
+        """A5 capability: accept only the exact independently committed amount."""
+        ceiling = self.escrow_ceiling_usd
+        if self.attempt_escrow_enabled is not True or ceiling is None:
+            raise ValueError("N4 explicit attempt escrow capability required")
+        required = self.reservation_for_attempt(window, attempt=attempt, ceiling=ceiling)
+        if reservation_usd != required:
+            raise ValueError("N4 exact committed attempt escrow required")
+        return await self._generate(
+            window=window, tenant_id=tenant_id, request_id=request_id, attempt=attempt,
+        )
+
+    async def _generate(
+        self, *, window: N4SourceWindow, tenant_id: UUID, request_id: str, attempt: int,
     ) -> N4ProviderReceipt:
         if self.prompt_version != N4_WINDOW_PROMPT_VERSION:
             raise ValueError("N4 provider prompt version differs from v2 contract")
         if attempt < 1:
             raise ValueError("N4 attempt must be positive and 1-based")
         output_cap = self.max_output_tokens if attempt == 1 else N4_RETRY_OUTPUT_TOKENS
-        if self.attempt_escrow_enabled:
-            required = self.reservation_for_attempt(
-                window, attempt=attempt, ceiling=self.escrow_ceiling_usd,
-            )
-            if reservation_usd != required:
-                raise ValueError("N4 exact committed attempt escrow required")
         prompt, inventory_count = self._window_prompt(window)
         if window.revision_id is None:
             raise ValueError("N4 source revision must be pinned")

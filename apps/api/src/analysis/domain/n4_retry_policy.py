@@ -34,7 +34,7 @@ class N4RetryPolicy:
             raise ValueError("N4 attempt outside A13 limit")
         return self.initial_usd if attempt == 1 else self.retry_usd
 
-    def identity(self) -> dict:
+    def identity(self) -> dict[str, str | int | bool]:
         return {
             "version": self.version,
             "initial_usd": str(self.initial_usd),

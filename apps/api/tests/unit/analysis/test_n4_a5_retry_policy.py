@@ -149,7 +149,7 @@ async def test_real_wrapper_request_and_exact_escaped_envelope(seam, attempt, ca
     window = windows[0]
     tokens, _, quote = provider.estimate_attempt(window, attempt=attempt)
     with pytest.raises(_MockTransportStop):
-        await provider.generate(
+        await provider.generate_reserved(
             window=window, tenant_id=authority.tenant_id, request_id=str(uuid4()),
             attempt=attempt, reservation_usd=quote,
         )
@@ -328,7 +328,7 @@ async def test_real_wrapper_preserves_measured_error_without_global_fallback(sea
     monkeypatch.setattr(wrapper.llm_client, "generate", partial)
     monkeypatch.setattr(df, "fallback_after_unbilled_rejection", forbidden)
     with pytest.raises(LLMPartialGenerationError) as caught:
-        await provider.generate(
+        await provider.generate_reserved(
             window=windows[0], tenant_id=authority.tenant_id, request_id=str(uuid4()),
             attempt=2, reservation_usd=provider.reservation_for_attempt(windows[0], attempt=2, ceiling=CALL),
         )
@@ -356,3 +356,44 @@ async def test_measured_retry_exception_settles_preserves_identity(monkeypatch):
     assert receipt["actual_provider"] == "anthropic" and receipt["actual_model_name"] == provider.model_name
     assert receipt["input_tokens"] == 1000 and receipt["output_tokens"] == 100
     assert len(calls) == len(ledger.accounts) == 2
+
+
+@pytest.mark.asyncio
+async def test_frozen_a1_entrypoint_cannot_bypass_explicit_escrow():
+    provider, windows, calls = candidate_provider(document(), uuid4())
+    window = windows[0]
+    with pytest.raises(ValueError, match="exact committed"):
+        await provider.generate(window=window, tenant_id=uuid4(), request_id=str(uuid4()))
+    assert not calls
+    provider.attempt_escrow_enabled = False
+    with pytest.raises(ValueError, match="exact committed"):
+        await provider.generate(window=window, tenant_id=uuid4(), request_id=str(uuid4()))
+    assert not calls
+
+
+@pytest.mark.asyncio
+async def test_reserved_entrypoint_cannot_activate_legacy_provider():
+    provider, windows, calls = make_provider(document(), uuid4())
+    provider.attempt_escrow_enabled = False
+    with pytest.raises(ValueError, match="explicit attempt escrow"):
+        await provider.generate_reserved(
+            window=windows[0], tenant_id=uuid4(), request_id=str(uuid4()), reservation_usd=CALL,
+        )
+    assert not calls
+
+
+def test_runner_rejects_missing_reserved_capability():
+    provider = SimpleNamespace(
+        model_name="synthetic", prompt_version="v2", attempt_escrow_enabled=True,
+    )
+    with pytest.raises(ValueError, match="explicit reserved provider capability"):
+        runner(provider, policy=None)
+
+
+@pytest.mark.asyncio
+async def test_runner_rejects_reserved_capability_drift_before_any_reservation(monkeypatch):
+    r, kw, ledger, provider, _, calls = setup_retry_run(monkeypatch)
+    provider.attempt_escrow_enabled = False
+    with pytest.raises(ValueError, match="pinned reserved provider capability"):
+        await r.run(**kw)
+    assert not ledger.reserves and not calls
