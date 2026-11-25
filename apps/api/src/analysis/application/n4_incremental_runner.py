@@ -132,14 +132,21 @@ class N4IncrementalRunner:
             raise ValueError("provider.prompt_version must be pinned before reservation")
         self.prompt_version = version
         self.model_id = provider.model_name
+        config = {
+            "prompt": version,
+            "model": self.model_id,
+            "window_chars": self.context_limit,
+            "overlap": self.overlap,
+        }
+        self.attempt_escrow_enabled = getattr(provider, "attempt_escrow_enabled", False) is True
+        self._attempt_escrow_policy = None
+        if self.attempt_escrow_enabled:
+            self._attempt_escrow_policy = json.dumps(
+                provider.escrow_policy(), sort_keys=True, separators=(",", ":"),
+            )
+            config["attempt_escrow"] = json.loads(self._attempt_escrow_policy)
         self.config_sha256 = sha256(json.dumps(
-            {
-                "prompt": version,
-                "model": self.model_id,
-                "window_chars": self.context_limit,
-                "overlap": self.overlap,
-            },
-            sort_keys=True, separators=(",", ":"),
+            config, sort_keys=True, separators=(",", ":"),
         ).encode()).hexdigest()
         if (
             not self.run_cap.is_finite() or self.run_cap <= 0
@@ -149,6 +156,24 @@ class N4IncrementalRunner:
             or not self.model_id.strip()
         ):
             raise ValueError("explicit positive run/call caps and pinned model required")
+
+    def _reservation_for_attempt(self, window: N4SourceWindow, attempt: int) -> Decimal:
+        """A5 quotes are per attempt; legacy providers retain their frozen amount."""
+        if not self.attempt_escrow_enabled:
+            return self.call_reservation
+        try:
+            policy = json.dumps(self.provider.escrow_policy(), sort_keys=True, separators=(",", ":"))
+            if policy != self._attempt_escrow_policy:
+                raise ValueError("N4 pinned escrow policy changed")
+            amount = self.provider.reservation_for_attempt(
+                window, attempt=attempt, ceiling=self.call_reservation,
+            )
+            if (not isinstance(amount, Decimal) or not amount.is_finite()
+                    or amount <= 0 or amount > self.call_reservation):
+                raise ValueError("N4 attempt exceeds committed call ceiling")
+            return amount
+        except (ValueError, ArithmeticError) as exc:
+            raise N4BudgetError("N4 attempt escrow unavailable") from exc
 
     @staticmethod
     async def _tenant_context(session: AsyncSession, tenant_id: UUID) -> None:
@@ -229,6 +254,7 @@ class N4IncrementalRunner:
         reason: str, actual_model_name: str | None = None,
         actual_provider: str | None = None,
         input_tokens: int | None = None, output_tokens: int | None = None,
+        provider_request_id: str | None = None,
     ) -> None:
         async with self.sessions() as session, session.begin():
             await self._tenant_context(session, authority.tenant_id)
@@ -238,6 +264,7 @@ class N4IncrementalRunner:
                 actual_model_name=actual_model_name,
                 actual_provider=actual_provider,
                 input_tokens=input_tokens, output_tokens=output_tokens,
+                provider_request_id=provider_request_id,
             )
             await block_window(
                 session, authority=authority, run_id=run_id,
@@ -342,12 +369,13 @@ class N4IncrementalRunner:
                         f"n4:{run_id}:{window.ordinal}:{window.context_sha256}:"
                         f"{self.model_id}{attempt_suffix}".encode()
                     ).hexdigest()
+                    attempt_reservation = self._reservation_for_attempt(window, attempt_no)
                     reserved = await reserve_call(
                         session, authority=authority,
                         run_id=run_id, window_ordinal=window.ordinal,
                         idempotency_key=call_key,
                         provider_model=self.provider.model_name,
-                        estimated_max_usd=self.call_reservation,
+                        estimated_max_usd=attempt_reservation,
                         period_key=self.period_key,
                         inherit_approved_scopes=self.inherit_approved_scopes,
                     )
@@ -373,7 +401,13 @@ class N4IncrementalRunner:
                     authority, run_id, "EXISTING_RESERVATION_REQUIRES_RECONCILIATION",
                 )
             try:
-                if attempt_no == 1:
+                if self.attempt_escrow_enabled:
+                    response = await self.provider.generate(
+                        window=window, tenant_id=authority.tenant_id,
+                        request_id=str(reserved.reservation_id), attempt=attempt_no,
+                        reservation_usd=attempt_reservation,
+                    )
+                elif attempt_no == 1:
                     # The frozen interface defaults attempt to 1. Keep the
                     # first-call compatibility of older providers; explicit
                     # paid retries require the v2-capable attempt argument.
@@ -424,6 +458,7 @@ class N4IncrementalRunner:
                     actual_provider=billable_provider,
                     input_tokens=getattr(exc, "input_tokens", None),
                     output_tokens=getattr(exc, "output_tokens", None),
+                    provider_request_id=getattr(exc, "provider_request_id", None),
                 )
                 return await self._outcome(
                     authority, run_id, "PROVIDER_RESULT_UNCERTAIN",
@@ -478,6 +513,17 @@ class N4IncrementalRunner:
                     cost=cost, reason="UNVERIFIED_PROVIDER_IDENTITY",
                 )
                 return await self._outcome(authority, run_id, "UNVERIFIED_PROVIDER_IDENTITY")
+            if self.attempt_escrow_enabled and cost > attempt_reservation:
+                # A known overrun is a liability, not UNKNOWN or a valid result.
+                await self._account_and_block(
+                    authority=authority, run_id=run_id, ordinal=window.ordinal,
+                    reservation_id=reserved.reservation_id, cost=cost,
+                    reason="PROVIDER_RESULT_UNCERTAIN",
+                    actual_model_name=response.model_used, actual_provider=actual_provider,
+                    input_tokens=response.input_tokens, output_tokens=response.output_tokens,
+                    provider_request_id=response.provider_request_id,
+                )
+                return await self._outcome(authority, run_id, "ATTEMPT_ESCROW_EXCEEDED")
             try:
                 parsed = parse_n4_window_output(
                     response.content, window=window,

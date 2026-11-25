@@ -81,6 +81,9 @@ async def test_effective_a5_bridge_request(monkeypatch, seam, attempt, cap):
             return await self.provider.generate(
                 window=window, tenant_id=authority.tenant_id,
                 request_id=str(reservation), attempt=attempt,
+                reservation_usd=self.provider.reservation_for_attempt(
+                    window, attempt=attempt, ceiling=Decimal("1"),
+                ),
             )
 
     monkeypatch.setattr(bridge, "N4IncrementalRunner", MockRunner)

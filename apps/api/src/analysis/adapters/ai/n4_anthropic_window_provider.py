@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 import os
-from decimal import Decimal
+from decimal import ROUND_CEILING, Decimal
 from uuid import UUID
 
 from src.analysis.application.n4_incremental_runner import N4ProviderReceipt
@@ -126,6 +126,10 @@ def _v2_provider_response(raw: str, raw_response: object) -> str:
 N4_INITIAL_OUTPUT_TOKENS = 8192
 N4_RETRY_OUTPUT_TOKENS = 16384
 N4_TIMEOUT_SECONDS = 300
+N4_ESCROW_ESTIMATOR_VERSION = 'utf8-json-framing-v1'
+N4_ESCROW_MARGIN = Decimal('1.25')
+N4_FRAMING_TOKENS = 2048
+N4_MONEY_SCALE = Decimal('0.000001')
 
 
 class AnthropicN4WindowProvider:
@@ -168,43 +172,102 @@ class AnthropicN4WindowProvider:
         self.approved_fallback_models = frozenset(
             route.model for route in self.fallback_routes
         )
+        self.attempt_escrow_enabled = escrow_preflight is not None
+        self.escrow_ceiling_usd = None
+        self._pinned_escrow_policy = None
         if escrow_preflight is not None:
             reservation_usd, windows = escrow_preflight
-            self._validate_escrow(reservation_usd, windows)
+            self.escrow_ceiling_usd = reservation_usd
+            self._pinned_escrow_policy = json.loads(json.dumps(self._escrow_policy()))
+            # The initial attempt has its own affordability check.
+            # Do not require hypothetical retry funding to open a first call.
+            self._validate_escrow(reservation_usd, windows, attempt=1)
 
-    def _validate_escrow(
-        self, reservation_usd: Decimal, windows: tuple[N4SourceWindow, ...],
-    ) -> None:
-        """Check every planned window before the runner acquires any reservation.
-
-        Use the same conservative offline estimate as the direct-route guard,
-        including the complete tool schema. This does not certify provider usage;
-        settlement remains authoritative. Reserve for the largest allowed attempt.
-        """
+    def _escrow_policy(self) -> dict:
         from src.core.ai.model_capabilities import full_document_capacity
 
-        if not reservation_usd.is_finite() or reservation_usd <= 0 or not windows:
-            raise ValueError("N4 positive escrow and source windows required")
         config = self.wrapper.model_router.configs[self.tier]
         context_cap, output_cap = full_document_capacity(config.name)
         input_rate = Decimal(str(config.cost_per_1m_input))
         output_rate = Decimal(str(config.cost_per_1m_output))
+        if config.name != self.model_name:
+            raise ValueError("N4 escrow model identity changed")
         if any(not rate.is_finite() or rate <= 0 for rate in (input_rate, output_rate)):
             raise ValueError("N4 verified positive rates required")
         if output_cap < N4_RETRY_OUTPUT_TOKENS:
             raise ValueError("N4 output exceeds verified model capacity")
-        tool_chars = len(json.dumps(_N4_TOOL, ensure_ascii=False))
+        if (self.escrow_ceiling_usd is None or not self.escrow_ceiling_usd.is_finite()
+                or self.escrow_ceiling_usd <= 0):
+            raise ValueError("N4 positive finite escrow required")
+        return {
+            "estimator": N4_ESCROW_ESTIMATOR_VERSION,
+            "model": config.name, "input_rate": str(input_rate), "output_rate": str(output_rate),
+            "context_cap": context_cap, "output_cap": output_cap,
+            "initial_output": self.max_output_tokens, "retry_output": N4_RETRY_OUTPUT_TOKENS,
+            "ceiling": str(self.escrow_ceiling_usd), "margin": str(N4_ESCROW_MARGIN),
+            "framing_tokens": N4_FRAMING_TOKENS,
+            "fallback": str(self.fallback_reservation_usd),
+            "tool_schema": _N4_TOOL, "system": N4_WINDOW_SYSTEM_PROMPT,
+        }
+
+    def escrow_policy(self) -> dict:
+        """Return a detached pinned policy; refuse mutable routing drift."""
+        current = self._escrow_policy()
+        if current != self._pinned_escrow_policy:
+            raise ValueError("N4 escrow configuration changed")
+        return current
+
+    def estimate_attempt(self, window: N4SourceWindow, *, attempt: int) -> tuple[int, int, Decimal]:
+        """Offline conservative estimate, not an invoice or tokenizer attestation.
+
+        Count the entire losslessly serialized request (including system,
+        inventory, schema, choice and JSON escaping) at one token per byte.
+        This overestimates ordinary lossless byte-tokenization; 2048 extra
+        tokens cover unobserved framing and a 25% financial margin remains.
+        The actual provider tokenizer/framing must be independently qualified
+        before runtime authorization; do not infer an unconditional API bound.
+        """
+        if type(attempt) is not int or attempt < 1:
+            raise ValueError("N4 attempt must be positive and 1-based")
+        policy = self.escrow_policy()
+        cap = self.max_output_tokens if attempt == 1 else N4_RETRY_OUTPUT_TOKENS
+        prompt, _ = self._window_prompt(window)
+        payload = {
+            "model": self.model_name, "max_tokens": cap, "temperature": 0.0,
+            "stop_sequences": [], "system": N4_WINDOW_SYSTEM_PROMPT,
+            "messages": [{"role": "user", "content": prompt}],
+            "tools": [_N4_TOOL],
+            "tool_choice": {"type": "tool", "name": "record_window_findings"},
+        }
+        # ensure_ascii=True also budgets JSON escapes, including non-ASCII.
+        encoded = json.dumps(payload, ensure_ascii=True, separators=(",", ":")).encode("utf-8")
+        input_tokens = len(encoded) + N4_FRAMING_TOKENS
+        if input_tokens + cap > policy["context_cap"]:
+            raise ValueError("N4 source exceeds verified model context")
+        estimate = (
+            Decimal(input_tokens) * Decimal(policy["input_rate"])
+            + Decimal(cap) * Decimal(policy["output_rate"])
+        ) / Decimal(1_000_000) * N4_ESCROW_MARGIN
+        return input_tokens, cap, estimate.quantize(N4_MONEY_SCALE, rounding=ROUND_CEILING)
+
+    def reservation_for_attempt(self, window: N4SourceWindow, *, attempt: int, ceiling: Decimal) -> Decimal:
+        """Quote the exact attempt against the unchanged per-call ceiling."""
+        if ceiling != self.escrow_ceiling_usd:
+            raise ValueError("N4 runner escrow ceiling mismatch")
+        _, _, estimate = self.estimate_attempt(window, attempt=attempt)
+        if estimate > ceiling:
+            raise ValueError("N4 worst-case charge exceeds existing per-window escrow")
+        # Existing approved direct-fallback transport expects the full committed
+        # escrow. Preserve that contract; do not increase any configured ceiling.
+        return ceiling if self.fallback_reservation_usd is not None else estimate
+
+    def _validate_escrow(
+        self, reservation_usd: Decimal, windows: tuple[N4SourceWindow, ...], *, attempt: int = 1,
+    ) -> None:
+        if not windows:
+            raise ValueError("N4 source windows required")
         for window in windows:
-            prompt, _ = self._window_prompt(window)
-            input_tokens = (len(prompt) + len(N4_WINDOW_SYSTEM_PROMPT) + tool_chars) * 4 + 2048
-            if input_tokens + N4_RETRY_OUTPUT_TOKENS > context_cap:
-                raise ValueError("N4 source exceeds verified model context")
-            max_charge = (
-                Decimal(input_tokens) * input_rate
-                + Decimal(N4_RETRY_OUTPUT_TOKENS) * output_rate
-            ) / Decimal(1_000_000) * Decimal("1.25")
-            if max_charge > reservation_usd:
-                raise ValueError("N4 worst-case charge exceeds existing per-window escrow")
+            self.reservation_for_attempt(window, attempt=attempt, ceiling=reservation_usd)
 
     @staticmethod
     def _window_prompt(window: N4SourceWindow) -> tuple[str, int]:
@@ -231,13 +294,20 @@ class AnthropicN4WindowProvider:
 
     async def generate(
         self, *, window: N4SourceWindow, tenant_id: UUID, request_id: str,
-        attempt: int = 1,  # noqa: ARG002 - frozen by JV1-A1, used from A5
+        attempt: int = 1,
+        reservation_usd: Decimal | None = None,
     ) -> N4ProviderReceipt:
         if self.prompt_version != N4_WINDOW_PROMPT_VERSION:
             raise ValueError("N4 provider prompt version differs from v2 contract")
         if attempt < 1:
             raise ValueError("N4 attempt must be positive and 1-based")
         output_cap = self.max_output_tokens if attempt == 1 else N4_RETRY_OUTPUT_TOKENS
+        if self.attempt_escrow_enabled:
+            required = self.reservation_for_attempt(
+                window, attempt=attempt, ceiling=self.escrow_ceiling_usd,
+            )
+            if reservation_usd != required:
+                raise ValueError("N4 exact committed attempt escrow required")
         prompt, inventory_count = self._window_prompt(window)
         if window.revision_id is None:
             raise ValueError("N4 source revision must be pinned")
