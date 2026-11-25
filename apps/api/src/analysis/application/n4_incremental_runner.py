@@ -41,6 +41,7 @@ from src.analysis.domain.n4_failure_kinds import (
     N4CoverageStatus,
     derive_n4_coverage_status,
 )
+from src.analysis.domain.n4_retry_policy import N4RetryPolicy
 from src.analysis.domain.n4_source_windows import (
     N4SourceWindow,
     plan_n4_source_windows,
@@ -104,6 +105,7 @@ class N4IncrementalRunner:
         max_context_chars: int = 12_000,
         overlap_chars: int = 400,
         max_attempts: int = 3,
+        retry_policy: N4RetryPolicy | None = None,
     ) -> None:
         self.sessions = session_factory
         self.provider = provider
@@ -139,6 +141,27 @@ class N4IncrementalRunner:
             "overlap": self.overlap,
         }
         self.attempt_escrow_enabled = getattr(provider, "attempt_escrow_enabled", False) is True
+        self.retry_policy = retry_policy
+        self._retry_policy_pin = None
+        provider_retry_policy = getattr(provider, "retry_policy", None)
+        if retry_policy is not None or provider_retry_policy is not None:
+            if (
+                type(retry_policy) is not N4RetryPolicy
+                or type(provider_retry_policy) is not N4RetryPolicy
+                or provider_retry_policy != retry_policy
+                or not self.attempt_escrow_enabled
+            ):
+                raise ValueError("N4 retry policy must be explicit and identical on runner/provider")
+            if (
+                not self.run_cap.is_finite() or not Decimal("0") < self.run_cap <= retry_policy.run_usd
+                or self.call_reservation != retry_policy.initial_usd
+                or self.max_attempts > retry_policy.max_attempts
+                or configured_fallback_hold is not None
+                or self.context_limit > 12000
+            ):
+                raise ValueError("N4 retry policy violates A13 limits")
+            self._retry_policy_pin = self._retry_runtime_identity()
+            config["retry_policy"] = self._retry_policy_pin
         self._attempt_escrow_policy = None
         if self.attempt_escrow_enabled:
             self._attempt_escrow_policy = json.dumps(
@@ -157,19 +180,51 @@ class N4IncrementalRunner:
         ):
             raise ValueError("explicit positive run/call caps and pinned model required")
 
+    def _retry_runtime_identity(self) -> dict:
+        return {
+            "policy": self.retry_policy.identity(),
+            "run_cap": str(self.run_cap), "call_cap": str(self.call_reservation),
+            "max_attempts": self.max_attempts, "window_chars": self.context_limit,
+            "overlap_chars": self.overlap,
+        }
+
+    def _check_retry_policy(self) -> None:
+        provider_policy = getattr(self.provider, "retry_policy", None)
+        if self._retry_policy_pin is None:
+            if self.retry_policy is not None or provider_policy is not None:
+                raise ValueError("N4 retry policy cannot be activated after initialization")
+            return
+        if (
+            type(self.retry_policy) is not N4RetryPolicy
+            or provider_policy != self.retry_policy
+            or not self.attempt_escrow_enabled
+            or getattr(self.provider, "fallback_reservation_usd", None) is not None
+            or self._retry_runtime_identity() != self._retry_policy_pin
+        ):
+            raise ValueError("N4 pinned retry policy changed")
+
     def _reservation_for_attempt(self, window: N4SourceWindow, attempt: int) -> Decimal:
         """A5 quotes are per attempt; legacy providers retain their frozen amount."""
-        if not self.attempt_escrow_enabled:
-            return self.call_reservation
         try:
+            self._check_retry_policy()
+            if not self.attempt_escrow_enabled:
+                return self.call_reservation
             policy = json.dumps(self.provider.escrow_policy(), sort_keys=True, separators=(",", ":"))
             if policy != self._attempt_escrow_policy:
                 raise ValueError("N4 pinned escrow policy changed")
             amount = self.provider.reservation_for_attempt(
                 window, attempt=attempt, ceiling=self.call_reservation,
             )
+            if getattr(self.provider, "retry_policy", None) != self.retry_policy:
+                raise ValueError("N4 retry policy drift")
+            effective_ceiling = (
+                self.retry_policy.ceiling(attempt) if self.retry_policy is not None
+                else self.call_reservation
+            )
+            if self.retry_policy is not None and attempt > self.max_attempts:
+                raise ValueError("N4 configured attempt limit exceeded")
             if (not isinstance(amount, Decimal) or not amount.is_finite()
-                    or amount <= 0 or amount > self.call_reservation):
+                    or amount <= 0 or amount > effective_ceiling):
                 raise ValueError("N4 attempt exceeds committed call ceiling")
             return amount
         except (ValueError, ArithmeticError) as exc:
@@ -296,6 +351,7 @@ class N4IncrementalRunner:
         ):
             raise ValueError("N4 provider identity changed; rebuild pinned runner")
 
+        self._check_retry_policy()
         windows = plan_n4_source_windows(
             model_safe_text, revision_id=str(authority.revision_id),
             max_context_chars=self.context_limit,

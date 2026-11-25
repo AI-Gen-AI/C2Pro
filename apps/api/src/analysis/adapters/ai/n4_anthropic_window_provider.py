@@ -24,6 +24,7 @@ from src.analysis.domain.n4_compact_window_response import (
     N4_WINDOW_SYSTEM_PROMPT,
     n4_window_source_message,
 )
+from src.analysis.domain.n4_retry_policy import N4RetryPolicy
 from src.analysis.domain.n4_source_windows import N4SourceWindow
 from src.core.ai.anthropic_wrapper import AIRequest, AnthropicWrapper
 from src.core.ai.direct_provider_fallback import approved_routes
@@ -143,6 +144,7 @@ class AnthropicN4WindowProvider:
         max_output_tokens: int = N4_INITIAL_OUTPUT_TOKENS,
         fallback_reservation_usd: Decimal | str | None = None,
         escrow_preflight: tuple[Decimal, tuple[N4SourceWindow, ...]] | None = None,
+        retry_policy: N4RetryPolicy | None = None,
     ) -> None:
         if max_output_tokens < 256 or max_output_tokens > 16384:
             raise ValueError("N4 window output cap outside safe range")
@@ -172,6 +174,16 @@ class AnthropicN4WindowProvider:
         self.approved_fallback_models = frozenset(
             route.model for route in self.fallback_routes
         )
+        if retry_policy is not None:
+            if type(retry_policy) is not N4RetryPolicy:
+                raise ValueError("N4 explicit versioned retry policy required")
+            if escrow_preflight is None or escrow_preflight[0] != retry_policy.initial_usd:
+                raise ValueError("N4 retry policy requires original A13 initial escrow")
+            if self.fallback_reservation_usd is not None:
+                raise ValueError("N4 candidate retry policy forbids fallback")
+            if self.max_output_tokens != N4_INITIAL_OUTPUT_TOKENS:
+                raise ValueError("N4 candidate retry policy requires 8192 initial tokens")
+        self.retry_policy = retry_policy
         self.attempt_escrow_enabled = escrow_preflight is not None
         self.escrow_ceiling_usd = None
         self._pinned_escrow_policy = None
@@ -199,7 +211,7 @@ class AnthropicN4WindowProvider:
         if (self.escrow_ceiling_usd is None or not self.escrow_ceiling_usd.is_finite()
                 or self.escrow_ceiling_usd <= 0):
             raise ValueError("N4 positive finite escrow required")
-        return {
+        policy = {
             "estimator": N4_ESCROW_ESTIMATOR_VERSION,
             "model": config.name, "input_rate": str(input_rate), "output_rate": str(output_rate),
             "context_cap": context_cap, "output_cap": output_cap,
@@ -209,6 +221,22 @@ class AnthropicN4WindowProvider:
             "fallback": str(self.fallback_reservation_usd),
             "tool_schema": _N4_TOOL, "system": N4_WINDOW_SYSTEM_PROMPT,
         }
+        if self.retry_policy is not None:
+            if (
+                type(self.retry_policy) is not N4RetryPolicy
+                or self.fallback_reservation_usd is not None
+                or self.fallback_routes
+                or self.wrapper.enable_retry is not False
+                or self.wrapper.llm_client.max_retries != 0
+                or self.wrapper.enable_cache is not False
+                or self.wrapper.cache_service is not None
+                or self.wrapper.max_tokens_limit != N4_RETRY_OUTPUT_TOKENS
+                or self.wrapper.llm_client.timeout_seconds != N4_TIMEOUT_SECONDS
+                or self.max_output_tokens != N4_INITIAL_OUTPUT_TOKENS
+            ):
+                raise ValueError("N4 candidate transport policy mismatch")
+            policy["retry_policy"] = self.retry_policy.identity()
+        return policy
 
     def escrow_policy(self) -> dict:
         """Return a detached pinned policy; refuse mutable routing drift."""
@@ -255,7 +283,10 @@ class AnthropicN4WindowProvider:
         if ceiling != self.escrow_ceiling_usd:
             raise ValueError("N4 runner escrow ceiling mismatch")
         _, _, estimate = self.estimate_attempt(window, attempt=attempt)
-        if estimate > ceiling:
+        effective_ceiling = (
+            self.retry_policy.ceiling(attempt) if self.retry_policy is not None else ceiling
+        )
+        if estimate > effective_ceiling:
             raise ValueError("N4 worst-case charge exceeds existing per-window escrow")
         # Existing approved direct-fallback transport expects the full committed
         # escrow. Preserve that contract; do not increase any configured ceiling.
@@ -332,6 +363,10 @@ class AnthropicN4WindowProvider:
                 "n4_incremental_window": True,
                 "prompt_version": self.prompt_version,
                 "inventory_clause_count": inventory_count,
+                **(
+                    {"n4_disable_fallback": True, "n4_retry_policy_version": self.retry_policy.version}
+                    if self.retry_policy is not None else {}
+                ),
                 **(
                     {
                         "n4_reservation_committed": True,
