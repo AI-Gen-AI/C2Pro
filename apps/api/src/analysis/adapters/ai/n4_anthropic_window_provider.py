@@ -123,6 +123,11 @@ def _v2_provider_response(raw: str, raw_response: object) -> str:
     return json.dumps(normalized, ensure_ascii=False, separators=(",", ":"))
 
 
+N4_INITIAL_OUTPUT_TOKENS = 8192
+N4_RETRY_OUTPUT_TOKENS = 16384
+N4_TIMEOUT_SECONDS = 300
+
+
 class AnthropicN4WindowProvider:
     """Request bounded JSON, with NO full-source continuation or retry."""
     provider_name = "anthropic"
@@ -131,8 +136,9 @@ class AnthropicN4WindowProvider:
     def __init__(
         self, *, wrapper: AnthropicWrapper,
         tier: ModelTier = ModelTier.STANDARD,
-        max_output_tokens: int = 8192,
+        max_output_tokens: int = N4_INITIAL_OUTPUT_TOKENS,
         fallback_reservation_usd: Decimal | str | None = None,
+        escrow_preflight: tuple[Decimal, tuple[N4SourceWindow, ...]] | None = None,
     ) -> None:
         if max_output_tokens < 256 or max_output_tokens > 16384:
             raise ValueError("N4 window output cap outside safe range")
@@ -162,18 +168,62 @@ class AnthropicN4WindowProvider:
         self.approved_fallback_models = frozenset(
             route.model for route in self.fallback_routes
         )
+        if escrow_preflight is not None:
+            reservation_usd, windows = escrow_preflight
+            self._validate_escrow(reservation_usd, windows)
+
+    def _validate_escrow(
+        self, reservation_usd: Decimal, windows: tuple[N4SourceWindow, ...],
+    ) -> None:
+        """Check every planned window before the runner acquires any reservation.
+
+        Use the same conservative offline estimate as the direct-route guard,
+        including the complete tool schema. This does not certify provider usage;
+        settlement remains authoritative. Reserve for the largest allowed attempt.
+        """
+        from src.core.ai.model_capabilities import full_document_capacity
+
+        if not reservation_usd.is_finite() or reservation_usd <= 0 or not windows:
+            raise ValueError("N4 positive escrow and source windows required")
+        config = self.wrapper.model_router.configs[self.tier]
+        context_cap, output_cap = full_document_capacity(config.name)
+        input_rate = Decimal(str(config.cost_per_1m_input))
+        output_rate = Decimal(str(config.cost_per_1m_output))
+        if any(not rate.is_finite() or rate <= 0 for rate in (input_rate, output_rate)):
+            raise ValueError("N4 verified positive rates required")
+        if output_cap < N4_RETRY_OUTPUT_TOKENS:
+            raise ValueError("N4 output exceeds verified model capacity")
+        tool_chars = len(json.dumps(_N4_TOOL, ensure_ascii=False))
+        for window in windows:
+            prompt, _ = self._window_prompt(window)
+            input_tokens = (len(prompt) + len(N4_WINDOW_SYSTEM_PROMPT) + tool_chars) * 4 + 2048
+            if input_tokens + N4_RETRY_OUTPUT_TOKENS > context_cap:
+                raise ValueError("N4 source exceeds verified model context")
+            max_charge = (
+                Decimal(input_tokens) * input_rate
+                + Decimal(N4_RETRY_OUTPUT_TOKENS) * output_rate
+            ) / Decimal(1_000_000) * Decimal("1.25")
+            if max_charge > reservation_usd:
+                raise ValueError("N4 worst-case charge exceeds existing per-window escrow")
+
+    @staticmethod
+    def _window_prompt(window: N4SourceWindow) -> tuple[str, int]:
+        inventory = build_n4_clause_inventory(window.context_text)
+        inventory_context = "\n\n".join(render_n4_clause_inventory_messages(inventory))
+        return n4_window_source_message(window) + "\n\n" + inventory_context, len(inventory)
+
 
     @classmethod
     def from_configured_account(
         cls, *, tier: ModelTier = ModelTier.STANDARD,
-        max_output_tokens: int = 8192,
+        max_output_tokens: int = N4_INITIAL_OUTPUT_TOKENS,
     ) -> AnthropicN4WindowProvider:
         return cls(
             wrapper=AnthropicWrapper(
                 enable_cache=False,
                 enable_retry=False,
-                max_tokens_limit=16384,
-                timeout_seconds=300,
+                max_tokens_limit=N4_RETRY_OUTPUT_TOKENS,
+                timeout_seconds=N4_TIMEOUT_SECONDS,
             ),
             tier=tier,
             max_output_tokens=max_output_tokens,
@@ -187,18 +237,15 @@ class AnthropicN4WindowProvider:
             raise ValueError("N4 provider prompt version differs from v2 contract")
         if attempt < 1:
             raise ValueError("N4 attempt must be positive and 1-based")
-        output_cap = self.max_output_tokens if attempt == 1 else 16384
-        inventory = build_n4_clause_inventory(window.context_text)
-        inventory_context = "\n\n".join(
-            render_n4_clause_inventory_messages(inventory)
-        )
+        output_cap = self.max_output_tokens if attempt == 1 else N4_RETRY_OUTPUT_TOKENS
+        prompt, inventory_count = self._window_prompt(window)
         if window.revision_id is None:
             raise ValueError("N4 source revision must be pinned")
         # Bypass re-anonymization ONLY because N4IncrementalRunner explicitly
         # requires an already N2-safe text projection. A second redaction pass
         # would otherwise invalidate source offsets and literal provenance.
         response = await self.wrapper.generate(AIRequest(
-            prompt=n4_window_source_message(window) + "\n\n" + inventory_context,
+            prompt=prompt,
             system_prompt=N4_WINDOW_SYSTEM_PROMPT,
             task_type=AITaskType.CONTRACT_EXTRACTION,
             force_model_tier=self.tier,
@@ -214,7 +261,7 @@ class AnthropicN4WindowProvider:
             metadata={
                 "n4_incremental_window": True,
                 "prompt_version": self.prompt_version,
-                "inventory_clause_count": len(inventory),
+                "inventory_clause_count": inventory_count,
                 **(
                     {
                         "n4_reservation_committed": True,

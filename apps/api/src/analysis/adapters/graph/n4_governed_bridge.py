@@ -18,7 +18,12 @@ from uuid import UUID
 
 from sqlalchemy import text
 
-from src.analysis.adapters.ai.n4_anthropic_window_provider import AnthropicN4WindowProvider
+from src.analysis.adapters.ai.n4_anthropic_window_provider import (
+    N4_INITIAL_OUTPUT_TOKENS,
+    N4_RETRY_OUTPUT_TOKENS,
+    N4_TIMEOUT_SECONDS,
+    AnthropicN4WindowProvider,
+)
 from src.analysis.application.n4_incremental_runner import N4IncrementalRunner, N4WindowProvider
 from src.analysis.domain.ai_source_text import llm_document_text
 from src.analysis.domain.n4_consolidation import consolidate_candidates
@@ -31,6 +36,7 @@ from src.analysis.domain.n4_failure_kinds import (
     derive_n4_coverage_status,
 )
 from src.analysis.domain.n4_reference_register import build_reference_register
+from src.analysis.domain.n4_source_windows import plan_n4_source_windows
 from src.analysis.domain.risk_provenance import classify_quote
 from src.core.ai.anthropic_wrapper import AnthropicWrapper
 from src.core.ai.model_router import ModelTier
@@ -724,11 +730,18 @@ async def run_governed_n4_in_graph(state: Mapping[str, Any]) -> dict[str, Any]:
         provider = AnthropicN4WindowProvider(
             wrapper=AnthropicWrapper(
                 enable_cache=False, enable_retry=False,
-                max_tokens_limit=2048, timeout_seconds=75,
+                max_tokens_limit=N4_RETRY_OUTPUT_TOKENS, timeout_seconds=N4_TIMEOUT_SECONDS,
             ),
             tier=ModelTier.STANDARD,
-            max_output_tokens=2048,
+            max_output_tokens=N4_INITIAL_OUTPUT_TOKENS,
             fallback_reservation_usd=per_call if direct else None,
+            escrow_preflight=(
+                per_call,
+                plan_n4_source_windows(
+                    source_text, revision_id=str(authority.revision_id),
+                    max_context_chars=chars, overlap_chars=overlap,
+                ),
+            ),
         )
     else:
         raise N4GraphBridgeBlocked("Unapproved N4 primary provider")
