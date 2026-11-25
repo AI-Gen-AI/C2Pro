@@ -112,5 +112,18 @@ def consolidate_candidates(items: Sequence[Mapping[str, Any]]) -> list[dict[str,
             ref for m in members for ref in (m.get("source_refs") or [])
         ]
         merged["consolidation_trace"] = trace
+        # Keep the original finding-to-occurrence association. The flat
+        # source_keys/source_refs remain for legacy consumers, not for binding.
+        if any("occurrence_evidence" in member for member in members):
+            merged["occurrence_members"] = [
+                {
+                    "origin": "N4_LEDGER",
+                    "run_id": member.get("run_id"),
+                    "finding_key": member.get("finding_key"),
+                    "window_ordinal": member.get("window_ordinal"),
+                    "occurrences": member.get("occurrence_evidence", []),
+                }
+                for member in members
+            ]
         result.append(merged)
     return result

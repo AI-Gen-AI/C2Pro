@@ -439,8 +439,9 @@ def _page_evidence(
     quote: str, source: str, refs: list[dict[str, Any]],
     spans: Sequence[_page_locator.PageSpan], *, revision_id: str,
     map_claimed: bool = False,
+    location_out: dict[str, Any] | None = None,
 ) -> tuple[int | None, str | None, str]:
-    """(page_number, source_locator, page_verification_status) for a verified quote."""
+    """Locate one verified quote; optionally retain its exact physical span."""
     # Validate the persisted identity before any locator or no-map fallback.
     # Only an absent span on an identity-bound reference is an unanchored
     # literal; an explicitly malformed or mismatched span is not.
@@ -504,6 +505,12 @@ def _page_evidence(
         f"p. {location.page_start}" if location.page_start == location.page_end
         else f"pp. {location.page_start}\u2013{location.page_end}"
     )
+    if location_out is not None:
+        location_out.update(
+            located_span=[location.start_offset, location.end_offset],
+            page_start=location.page_start,
+            page_end=location.page_end,
+        )
     return location.page_start, locator, "PAGE_LOCATED"
 
 
@@ -520,35 +527,91 @@ def _candidate_payload(
         raise N4GraphBridgeBlocked("N4 candidate title absent")
     if not isinstance(reason, str) or not reason.strip():
         raise N4GraphBridgeBlocked("N4 interpretation absent")
-    reported_quote = claim.get("source_quote")
-    verified_quote, verified_status = classify_quote(reported_quote, source)
-    is_projection_match = bool(
-        verified_quote and verified_status == "VERIFIED"
-        and claim.get("source_evidence_status") == "EXACT_MODEL_SAFE_MATCH"
-        and any(
-            isinstance(ref, dict)
-            and ref.get("source_kind") == "MODEL_SAFE_PROJECTION"
-            and ref.get("evidence_status") == "EXACT_MODEL_SAFE_MATCH"
-            for ref in refs
+    # A5 persists [primary_ref, *supporting_refs] and a positional list
+    # of supporting literals (including None). Resolve BEFORE consolidation.
+    # Older claims lack this list: preserve their conservative all-ref primary
+    # check, never infer supporting roles from an unversioned flattened list.
+    positional = "supporting_quotes" in claim
+    supporting = claim.get("supporting_quotes")
+    shape_valid = (
+        not positional or (
+            isinstance(supporting, list)
+            and len(refs) == 1 + len(supporting)
+            and all(value is None or isinstance(value, str) for value in supporting)
         )
     )
-    quote = verified_quote if is_projection_match else None
-    # "VERIFIED" here means an exact match in the N2 model-safe projection. It is
-    # not a page-verified citation of the original document: that is reported
-    # separately in ``page_verification_status``. When a page map exists but the
-    # quote cannot be placed on a page, the quote is withheld, never VERIFIED.
-    page_number: int | None = None
-    locator: str | None = None
-    page_status: str | None = None
-    unresolved = False
-    if quote:
-        page_number, locator, page_status = _page_evidence(
-            quote, source, refs, _page_spans(page_spans), revision_id=revision_id,
-            map_claimed=map_claimed,
-        )
-        unresolved = page_status == "PAGE_UNRESOLVED"
-        if unresolved:
-            quote = None
+    literals = [claim.get("source_quote")]
+    if positional and shape_valid and isinstance(supporting, list):
+        literals.extend(supporting)
+    digest = sha256(source.encode("utf-8")).hexdigest()
+    identity_valid = bool(revision_id) and all(
+        isinstance(ref, dict)
+        and ref.get("source_kind") == "MODEL_SAFE_PROJECTION"
+        and ref.get("document_revision_id") == revision_id
+        and ref.get("source_sha256") == digest
+        for ref in refs
+    )
+    spans = _page_spans(page_spans)
+    occurrences: list[dict[str, Any]] = []
+    for index, ref in enumerate(refs):
+        role = "primary" if index == 0 else "supporting" if positional else "legacy_unassigned"
+        literal = literals[index] if index < len(literals) else None
+        ref_status = ref.get("evidence_status") if isinstance(ref, dict) else None
+        verified, verified_status = classify_quote(literal, source)
+        page: int | None = None
+        page_locator: str | None = None
+        status: str | None = None
+        reason_code = "OCCURRENCE_NOT_VERIFIED"
+        location: dict[str, Any] = {}
+        if not shape_valid:
+            reason_code = "REFERENCE_CARDINALITY_MISMATCH"
+            status = "PAGE_UNRESOLVED"
+        elif not identity_valid:
+            reason_code = "REFERENCE_IDENTITY_MISMATCH"
+            status = "PAGE_UNRESOLVED"
+        elif role == "legacy_unassigned":
+            reason_code = "LEGACY_ROLE_UNASSIGNED"
+        elif (
+            verified and verified_status == "VERIFIED"
+            and ref_status == "EXACT_MODEL_SAFE_MATCH"
+            and (index != 0 or claim.get("source_evidence_status") == ref_status)
+        ):
+            # Every A5 occurrence uses its OWN literal and anchor. The legacy
+            # primary retains the old all-ref ambiguity/corruption guard.
+            own_refs = [ref] if positional else refs
+            page, page_locator, status = _page_evidence(
+                verified, source, own_refs, spans, revision_id=revision_id,
+                map_claimed=map_claimed, location_out=location,
+            )
+            reason_code = status
+        elif isinstance(ref_status, str) and ref_status != "EXACT_MODEL_SAFE_MATCH":
+            reason_code = ref_status
+        retained = verified if status in {"PAGE_LOCATED", "PAGE_UNVERIFIED_NO_PAGE_MAP"} else None
+        occurrences.append({
+            "ref_index": index,
+            "role": role,
+            "original_ref": ref,
+            "source_evidence_status": ref_status,
+            "source_quote": retained,
+            "page_number": page,
+            "source_locator": page_locator,
+            "page_verification_status": status or "PAGE_UNRESOLVED",
+            "reason": reason_code,
+            **location,
+        })
+    primary = occurrences[0]
+    quote = primary["source_quote"]
+    page_number = primary["page_number"]
+    locator = primary["source_locator"]
+    # Preserve the legacy public status for a missing/invented primary;
+    # the full reason is available in occurrence evidence.
+    page_status = primary["page_verification_status"]
+    if (
+        page_status == "PAGE_UNRESOLVED" and shape_valid and identity_valid
+        and primary["reason"] not in {"PAGE_UNRESOLVED"}
+    ):
+        page_status = None
+    unresolved = page_status == "PAGE_UNRESOLVED"
     return {
         "title": title.strip(),
         "description": reason.strip(),
@@ -566,6 +629,8 @@ def _candidate_payload(
         "page_number": page_number,
         "source_locator": locator,
         "page_verification_status": page_status,
+        # Transient graph provenance only. Removed from RiskItem before freeze.
+        "occurrence_evidence": occurrences,
     }
 
 
@@ -619,8 +684,14 @@ def _reference_proposals(
             "source_evidence_status": "EXACT_MODEL_SAFE_MATCH",
         }, refs, source, revision_id=revision_id, page_spans=page_spans,
             map_claimed=map_claimed)
+        occurrences = risk.pop("occurrence_evidence")
         risks.append(risk)
         provenance.append({
+            "occurrence_members": [{
+                "origin": "literal_reference_register",
+                "register_key": key,
+                "occurrences": occurrences,
+            }],
             "finding_key": key,
             "window_ordinal": None,
             "source_refs": refs,
@@ -737,12 +808,13 @@ async def run_governed_n4_in_graph(state: Mapping[str, Any]) -> dict[str, Any]:
         candidates.append({
             **payload,
             "finding_key": row["finding_key"],
+            "run_id": str(outcome.run_id),
             "window_ordinal": int(row["window_ordinal"]),
             "source_refs": row["source_refs"],
         })
     merged = consolidate_candidates(candidates)
-    _trace_keys = {"finding_key", "window_ordinal", "source_refs", "source_keys",
-                   "consolidation_trace"}
+    _trace_keys = {"finding_key", "run_id", "window_ordinal", "source_refs", "source_keys",
+                   "consolidation_trace", "occurrence_evidence", "occurrence_members"}
     risks = [{k: v for k, v in m.items() if k not in _trace_keys} for m in merged]
     provenance = [{
         "finding_key": m["finding_key"],
@@ -750,6 +822,7 @@ async def run_governed_n4_in_graph(state: Mapping[str, Any]) -> dict[str, Any]:
         "source_refs": m["source_refs"],
         "source_keys": m["source_keys"],
         "consolidation_trace": m["consolidation_trace"],
+        "occurrence_members": m["occurrence_members"],
     } for m in merged]
     register = build_reference_register(source_text, [
         {"finding_key": m["finding_key"], "source_quote": m.get("source_quote")}
