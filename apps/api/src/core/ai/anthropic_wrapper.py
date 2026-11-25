@@ -451,6 +451,14 @@ class AnthropicWrapper:
                 request_id=request.request_id,
                 error_type=type(e).__name__,
             )
+            # An explicit N4 candidate no-fallback marker is restrictive only.
+            # Preserve the original exception, including any measured liability,
+            # even if a global legacy fallback flag is configured.
+            if (
+                request.metadata.get("n4_incremental_window") is True
+                and request.metadata.get("n4_disable_fallback") is True
+            ):
+                raise
             # Existing PII, prompt and tenant boundaries stay authoritative.
             # Fall back only after an explicit unbilled failure and only within
             # an already persisted escrow; the transport owns no new budget.
